@@ -3,9 +3,9 @@
 
 
 // Library only supports hardware SPI at this time
-// Connect SCLK to UNO Digital #13 (Hardware SPI clock)
-// Connect MISO to UNO Digital #12 (Hardware SPI MISO)
-// Connect MOSI to UNO Digital #11 (Hardware SPI MOSI)
+// Connect SCLK to ESP32-PROS3 Digital #36 (Hardware SPI clock)
+// Connect MISO to ESP32-PROS3 Digital #37 (Hardware SPI MISO)
+// Connect MOSI to ESP32-PROS3 Digital #35 (Hardware SPI MOSI)
 #define RA8875_INT 9
 #define RA8875_CS 34
 #define RA8875_RESET 38
@@ -19,6 +19,7 @@ void setup()
   Serial.println("RA8875 start");
 
   /* Initialize the display using 'RA8875_480x80', 'RA8875_480x128', 'RA8875_480x272' or 'RA8875_800x480' */
+  // Test system display is 800x480, therefore init to 'RA8875_800x480'
   if (!tft.begin(RA8875_800x480)) {
     Serial.println("RA8875 Not Found!");
     while (1);
@@ -31,7 +32,7 @@ void setup()
   tft.PWM1config(true, RA8875_PWM_CLK_DIV1024); // PWM output for backlight
   tft.PWM1out(255);
 
-  // With hardware accelleration this is instant
+  // With hardware acceleration this is instant
   tft.fillScreen(RA8875_WHITE);
 
   // Play with PWM
@@ -47,6 +48,7 @@ void setup()
   }
   tft.PWM1out(255);
 
+  // Solid color screen fill
   tft.fillScreen(RA8875_RED);
   delay(500);
   tft.fillScreen(RA8875_YELLOW);
@@ -63,11 +65,13 @@ void setup()
   // tft.drawCircle(100, 100, 50, RA8875_BLACK);
   // tft.fillCircle(100, 100, 49, RA8875_GREEN);
 
+  // Draw rectangles for 5 choice
   tft.fillRect(70, 70, 100, 100, RA8875_WHITE);
   tft.fillRect(220, 70, 100, 100, RA8875_WHITE);
   tft.fillRect(370, 70, 100, 100, RA8875_WHITE);
   tft.fillRect(520, 70, 100, 100, RA8875_WHITE);
   tft.fillRect(670, 70, 100, 100, RA8875_WHITE);
+
   // tft.drawRect(10, 10, 400, 200, RA8875_GREEN);
   // tft.fillRoundRect(200, 10, 200, 100, 10, RA8875_RED);
   // tft.drawPixel(10,10,RA8875_BLACK);
