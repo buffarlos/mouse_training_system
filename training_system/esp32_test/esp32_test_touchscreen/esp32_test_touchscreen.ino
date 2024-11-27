@@ -1,7 +1,6 @@
 #include "Adafruit_GFX.h"
 #include "Adafruit_RA8875.h"
 
-
 // Library only supports hardware SPI at this time
 // Connect SCLK to ESP32-PROS3 Digital #36 (Hardware SPI clock)
 // Connect MISO to ESP32-PROS3 Digital #37 (Hardware SPI MISO)
