@@ -5,6 +5,9 @@ char mac[17];
 char defaultMac[] = "Default MAC Address: ";
 char getMacFail[] = "Failed to get MAC Address";
 
+// const char* ssid = ;
+// const char* password = ;
+
 bool getMacAddress(){
   uint8_t baseMac[6];
   char macAddress[17];
@@ -52,7 +55,16 @@ void setup(){
   Serial.begin(9600);
 
   WiFi.mode(WIFI_STA);
-  WiFi.STA.begin();
+  WiFi.begin(ssid, password);
+  Serial.println("\nConnecting");
+
+  while(WiFi.status() != WL_CONNECTED){
+    Serial.print(".");
+    delay(100);
+  }
+  Serial.println("\nConnected to the WiFi network");
+    Serial.print("Local ESP32 IP: ");
+    Serial.println(WiFi.localIP());
 
   Serial.print(defaultMac);
   bool macSuccess = getMacAddress();
