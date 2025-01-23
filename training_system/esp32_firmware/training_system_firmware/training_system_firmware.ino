@@ -18,6 +18,9 @@
 #define RA8875_INT 9
 #define RA8875_CS 34
 #define RA8875_RESET 38
+#define FEEDER_PUMP_SIGNAL 1
+#define MAGAZINE_LIGHT_OPERATION 2
+#define MAGAZINE_REPORT_SIGNAL 3
 
 // ------------------------- Global variables -------------------------
 char mac[17];
@@ -100,10 +103,194 @@ void printToScreen(int startx, int starty, char text[], uint16_t color, uint16_t
   }
 }
 
-// ------------------------- Training functions -------------------------
-void fiveCSRTConstantInterval() {
+void administerReward(int feederOperationTime, int rewardAcceptanceLatency) {
+  digitalWrite(FEEDER_PUMP_SIGNAL, HIGH);
+  delay(feederOperationTime);
+  digitalWrite(FEEDER_PUMP_SIGNAL, LOW);
+  digitalWrite(MAGAZINE_LIGHT_OPERATION, HIGH);
+  unsigned long start = millis();
   while (true) {
-    Serial.println("==== 5CSRT Constant Interval ====");
+    if (digitalRead(MAGAZINE_REPORT_SIGNAL) == LOW) {
+      Serial.print("Reward administered and accepted in ");
+      Serial.print(millis() - start);
+      Serial.println(" milliseconds");
+      break;
+    }
+    if (millis() - start > 2000) {
+      Serial.print("Reward administered but not accepted");
+      break;
+    }
+  }
+}
+
+// ------------------------- Training functions -------------------------
+void habituationOne() {
+  Serial.println("==== Habituation 1 ====");
+  administerReward(1000, 5000);
+  delay(5000);
+}
+
+void habituationTwo() {
+  Serial.println("==== Habituation 2 ====");
+  for (int i = 0; i < 5; ++i) {
+    illuminateChoice(i);
+  }
+  unsigned long start = millis();
+  while (true) {
+    if (! digitalRead(RA8875_INT)) {
+      if (tft.touched()) {
+        tft.touchRead(&tx, &ty);
+        if (checkChoiceTouch(tx, ty, 0) ||
+          checkChoiceTouch(tx, ty, 1) ||
+          checkChoiceTouch(tx, ty, 2) ||
+          checkChoiceTouch(tx, ty, 3) ||
+          checkChoiceTouch(tx, ty, 4)) {
+          unsigned long latency = millis() - start;
+          Serial.print("Correct response in ");
+          Serial.print(latency);
+          Serial.println(" milliseconds");
+          extinguishChoices();
+          administerReward(1000, 5000);
+          break;
+        }
+        else {
+          unsigned long latency = millis() - start;
+          Serial.print("Incorrect response in ");
+          Serial.print(latency);
+          Serial.println(" milliseconds");
+          extinguishChoices();
+          break;
+        }
+      }
+    }
+    if (millis() - start > 2000) {
+      Serial.println("Task timed out after 2 seconds");
+      extinguishChoices();
+      break;
+    }
+  }
+  delay(500);
+  tft.touchRead(&tx, &ty);
+}
+
+void noGoTrial() {
+  Serial.println("==== No Go ====");
+  for (int i = 0; i < 5; ++i) {
+    illuminateChoice(i);
+  }
+  unsigned long start = millis();
+  while (true) {
+    if (! digitalRead(RA8875_INT)) {
+      if (tft.touched()) {
+        tft.touchRead(&tx, &ty);
+        unsigned long latency = millis() - start;
+        Serial.print("Failed inhibition in ");
+        Serial.print(latency);
+        Serial.println(" milliseconds");
+        extinguishChoices();
+        delay(10000);
+        break;
+      }
+    }
+    if (millis() - start > 2000) {
+      Serial.println("Inhibition success");
+      extinguishChoices();
+      break;
+    }
+  }
+  delay(500);
+  tft.touchRead(&tx, &ty);
+}
+
+void fiveCSRTConstantInterval(int stimulusDuration) {
+  Serial.println("==== 5CSRT Constant Interval ====");
+  Serial.print(stimulusDuration);
+  Serial.println(" millisecond stimulus");
+  int choice = random(0, 5);
+  illuminateChoice(choice);
+  unsigned long start = millis();
+  while (true) {
+    if (! digitalRead(RA8875_INT)) {
+      if (tft.touched()) {
+        tft.touchRead(&tx, &ty);
+        if (checkChoiceTouch(tx, ty, choice)) {
+          unsigned long latency = millis() - start;
+          Serial.print("Correct response in ");
+          Serial.print(latency);
+          Serial.println(" milliseconds");
+          extinguishChoices();
+          administerReward(1000, 5000);
+          break;
+        }
+        else {
+          unsigned long latency = millis() - start;
+          Serial.print("Incorrect response in ");
+          Serial.print(latency);
+          Serial.println(" milliseconds");
+          extinguishChoices();
+          break;
+        }
+      }
+    }
+    if (millis() - start > stimulusDuration) {
+      Serial.println("Task timed out");
+      extinguishChoices();
+      break;
+    }
+  }
+  delay(500);
+  tft.touchRead(&tx, &ty);
+  delay(5000);
+}
+
+void fiveCSRTVariableInterval(int interval) {
+  Serial.println("==== 5CSRT Variable Interval ====");
+  Serial.print(interval);
+  Serial.println(" millisecond interval");
+  int choice = random(0, 5);
+  illuminateChoice(choice);
+  unsigned long start = millis();
+  while (true) {
+    if (! digitalRead(RA8875_INT)) {
+      if (tft.touched()) {
+        tft.touchRead(&tx, &ty);
+        if (checkChoiceTouch(tx, ty, choice)) {
+          unsigned long latency = millis() - start;
+          Serial.print("Correct response in ");
+          Serial.print(latency);
+          Serial.println(" milliseconds");
+          extinguishChoices();
+          administerReward(1000, 5000);
+          break;
+        }
+        else {
+          unsigned long latency = millis() - start;
+          Serial.print("Incorrect response in ");
+          Serial.print(latency);
+          Serial.println(" milliseconds");
+          extinguishChoices();
+          break;
+        }
+      }
+    }
+    if (millis() - start > 2000) {
+      Serial.println("Task timed out");
+      extinguishChoices();
+      break;
+    }
+  }
+  delay(500);
+  tft.touchRead(&tx, &ty);
+  delay(interval);
+}
+
+void continuousPerformanceTaskTwoToOne() {
+  Serial.println("==== Continuous Performance Task 2:1 ====");
+  int noGo = random(0, 3);
+  if (noGo == 2) {
+    noGoTrial();
+  }
+  else {
     int choice = random(0, 5);
     illuminateChoice(choice);
     unsigned long start = millis();
@@ -117,6 +304,7 @@ void fiveCSRTConstantInterval() {
             Serial.print(latency);
             Serial.println(" milliseconds");
             extinguishChoices();
+            administerReward(1000, 5000);
             break;
           }
           else {
@@ -130,14 +318,59 @@ void fiveCSRTConstantInterval() {
         }
       }
       if (millis() - start > 2000) {
-        Serial.println("Task timed out after 2 seconds");
+        Serial.println("Task timed out");
         extinguishChoices();
         break;
       }
     }
-    // Debounce grace period
     delay(500);
     tft.touchRead(&tx, &ty);
+    delay(2000);
+  }
+}
+
+void continuousPerformanceTaskFiveToOne(int stimulusDuration) {
+  Serial.println("==== Continuous Performance Task 5:1 ====");
+  int noGo = random(0, 6);
+  if (noGo == 5) {
+    noGoTrial();
+  }
+  else {
+    int choice = random(0, 5);
+    illuminateChoice(choice);
+    unsigned long start = millis();
+    while (true) {
+      if (! digitalRead(RA8875_INT)) {
+        if (tft.touched()) {
+          tft.touchRead(&tx, &ty);
+          if (checkChoiceTouch(tx, ty, choice)) {
+            unsigned long latency = millis() - start;
+            Serial.print("Correct response in ");
+            Serial.print(latency);
+            Serial.println(" milliseconds");
+            extinguishChoices();
+            administerReward(1000, 5000);
+            break;
+          }
+          else {
+            unsigned long latency = millis() - start;
+            Serial.print("Incorrect response in ");
+            Serial.print(latency);
+            Serial.println(" milliseconds");
+            extinguishChoices();
+            break;
+          }
+        }
+      }
+      if (millis() - start > stimulusDuration) {
+        Serial.println("Task timed out");
+        extinguishChoices();
+        break;
+      }
+    }
+    delay(500);
+    tft.touchRead(&tx, &ty);
+    delay(5000);
   }
 }
 
@@ -186,5 +419,5 @@ void setup() {
 
 // ------------------------- Main loop -------------------------
 void loop() {
-  fiveCSRTConstantInterval();
+  fiveCSRTConstantInterval(1000);
 }
