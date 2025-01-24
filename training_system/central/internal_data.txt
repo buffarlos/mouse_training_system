@@ -1,0 +1,7 @@
+Store mouse ID -> hab, and previous metrics here
+
+1 0
+2 0
+3 1
+4 1
+5 2
