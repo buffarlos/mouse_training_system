@@ -1,6 +1,11 @@
 import matplotlib.pyplot as plt
+import base64
+import io
+import webbrowser
+import os
+from datetime import datetime
 
-def visualize(mouse_id, stage, metrics):
+def generate_plot(mouse_id, stage, metrics):
     plt.figure(figsize=(10, 5))
     
     if stage == "hab1":
@@ -41,4 +46,20 @@ def visualize(mouse_id, stage, metrics):
     plt.title(f"Mouse {mouse_id} - {stage} Performance")
     plt.xlabel("Metric")
     plt.grid(True)
-    plt.show()
+    
+    # Create directory if it doesn't exist
+    folder_name = f"{mouse_id}_{stage}"
+    os.makedirs(folder_name, exist_ok=True)
+    
+    # Generate timestamped filename
+    timestamp = datetime.now().strftime("%y%m%d_%H%M%S")
+    file_path = os.path.join(folder_name, f"{timestamp}.png")
+    
+    plt.savefig(file_path)
+    plt.close()
+    
+    return file_path
+
+def visualize(mouse_id, stage, metrics):
+    file_path = generate_plot(mouse_id, stage, metrics)
+    webbrowser.open(file_path)

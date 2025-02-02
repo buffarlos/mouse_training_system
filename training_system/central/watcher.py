@@ -18,30 +18,31 @@ class Watcher(FileSystemEventHandler):
             self.update_metrics()
 
     def update_metrics(self):
-        with open("test.txt", "r") as file:
-            lines = file.readlines()[1:]  # Skip headers
-            data = [list(map(int, line.strip().split())) for line in lines]
-            
-        # Compute all required metrics
-        self.metrics["Correct"] = sum(row[1] for row in data)
-        self.metrics["Incorrect"] = sum(row[2] for row in data)
-        self.metrics["Omission"] = sum(row[4] for row in data)
-        self.metrics["Correct Withholding"] = sum(row[5] for row in data)
-        self.metrics["Incorrect Withholding"] = sum(row[6] for row in data)
+        data = np.loadtxt("test.txt", delimiter="\t", skiprows=1).T  # Load and transpose data
         
+        # Compute all required metrics (SUMMING OVER COLUMNS, NOT ROWS)
+        self.metrics["Correct"] = np.sum(data[1, :])  
+        self.metrics["Incorrect"] = np.sum(data[2, :])  
+        self.metrics["Omission"] = np.sum(data[4, :])  
+        self.metrics["Correct Withholding"] = np.sum(data[5, :])  
+        self.metrics["Incorrect Withholding"] = np.sum(data[6, :])  
+
+        # Compute percentages and other derived metrics
         self.metrics["Correct Percentage"] = correct_perc(self.metrics["Correct"], self.metrics["Incorrect"])
         self.metrics["Omission Percentage"] = omission_perc(self.metrics["Omission"], self.metrics["Correct"], self.metrics["Incorrect"])
         self.metrics["Correct Withholding Percentage"] = c_wh_perc(self.metrics["Correct Withholding"], self.metrics["Incorrect Withholding"])
         self.metrics["Difference Withholding"] = diff_wh(self.metrics["Correct Withholding Percentage"], self.metrics["Omission Percentage"])
         self.metrics["False Alarm Rate"] = false_alarm(self.metrics["Correct Withholding"], self.metrics["Incorrect Withholding"])
         self.metrics["Hit Rate"] = hit_rate(self.metrics["Correct"], self.metrics["Incorrect"], self.metrics["Omission"])
+        
+        print(self.metrics["Correct"])
         print(f"Updated Metrics for Mouse {self.mouse_id}, Stage {self.stage}")
 
         # Compute threshold
         threshold = compute_threshold(task=self.stage, metrics=self.metrics)
 
         # Visualization
-        visualize(self)
+        visualize(self.mouse_id, self.stage, self.metrics)
 
         print(f"Threshold Passed for next stage: {threshold}")
 
