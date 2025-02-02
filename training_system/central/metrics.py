@@ -28,3 +28,27 @@ def sensitivity_index():
     
 def responsivity_index():
     raise NotImplementedError
+
+def compute_threshold(task, metrics):
+    if task == "hab1":
+        '''Requires 30 or more responses within 2 days'''
+        if(metrics["Correct"] + metrics["Incorrect"] >= 30):
+            return True
+        else:
+            return False
+        
+    elif task == "hab2":
+        '''Requires 70 or more correct responses within 2 days'''
+        if(metrics["Correct"] >= 70):
+            return True
+        else:
+            return False
+        
+    elif task == "5csr":
+        raise NotImplementedError
+    
+    elif task == "cpt":
+        raise NotImplementedError
+    
+    else:
+        raise NotImplementedError
