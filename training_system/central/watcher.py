@@ -75,7 +75,11 @@ class Watcher(FileSystemEventHandler):
         self.metrics["Incorrect"] = np.sum(new_data[2, :])  
         self.metrics["Omission"] = np.sum(new_data[4, :])  
         self.metrics["Correct Withholding"] = np.sum(new_data[5, :])  
-        self.metrics["Incorrect Withholding"] = np.sum(new_data[6, :])  
+        self.metrics["Incorrect Withholding"] = np.sum(new_data[6, :])
+        self.metrics["Cumulative Correct Latency"] = np.sum(new_data[7, :])
+        self.metrics["Cumulative Incorrect Latency"] = np.sum(new_data[8, :])
+        self.metrics["Cumulative Reward Latency"] = np.sum(new_data[9, :])
+        self.metrics["Cumulative Premature Latency"] = np.sum(new_data[10, :])
 
         # Compute percentages and derived metrics
         self.metrics["Correct Percentage"] = correct_perc(self.metrics["Correct"], self.metrics["Incorrect"])
