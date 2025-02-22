@@ -38,17 +38,68 @@ def compute_threshold(task, metrics):
             return False
         
     elif task == "hab2":
-        '''Requires 70 or more correct responses within 2 days'''
-        if(metrics["Correct"] >= 70):
+        '''Requires 70 or more responses within 2 days'''
+        if(metrics["Correct"] + metrics["Incorrect"] >= 70):
             return True
         else:
             return False
         
-    elif task == "5csr":
-        raise NotImplementedError
+    elif task == "5csr_citi_10":
+        '''30 correct respones + MCL of less than half of stim duration'''
+        if(metrics["Correct"] >= 30) & (metrics["Mean Correct Latency"] < 5):
+            return True
+        else:
+            return False
     
-    elif task == "cpt":
-        raise NotImplementedError
+
+    elif task == "5csr_citi_8":
+        '''30 correct respones + MCL of less than half of stim duration'''
+        if(metrics["Correct"] >= 30) & (metrics["Mean Correct Latency"] < 4):
+            return True
+        else:
+            return False
     
-    else:
+    elif task == "5csr_citi_4":
+        '''30 correct respones + MCL of less than half of stim duration'''
+        if(metrics["Correct"] >= 30) & (metrics["Mean Correct Latency"] < 2):
+            return True
+        else:
+            return False
+    
+    elif task == "5csr_citi_2" or "5csr_viti":
+        '''30 correct respones + MCL of less than half of stim duration'''
+        if(metrics["Correct"] >= 30) & (metrics["Mean Correct Latency"] < 1.5):
+            return True
+        else:
+            return False
+    
+    elif task == "rcpt_viti_2_to_1":
+        '''30 correct respones + MCL of less than half of stim duration'''
+        if(metrics["Correct"] >= 30) & (metrics["Mean Correct Latency"] < 1.5):
+            return True
+        else:
+            return False
+        
+    elif task == "rcpt_viti_2":
+        '''30 correct respones + MCL of less than half of stim duration'''
+        if(metrics["Correct"] >= 30) & (metrics["Mean Correct Latency"] < 1.5):
+            return True
+        else:
+            return False
+    
+    elif task == "rcpt_viti_175":
+        '''30 correct respones + MCL of less than half of stim duration'''
+        if(metrics["Correct"] >= 30) & (metrics["Mean Correct Latency"] < 1.5):
+            return True
+        else:
+            return False
+    
+    elif task == "rcpt_viti_15":
+        '''30 correct respones + MCL of less than half of stim duration'''
+        if(metrics["Correct"] >= 30) & (metrics["Mean Correct Latency"] < 1.5):
+            return True
+        else:
+            return False
+    
+    elif task == "5cpt":
         raise NotImplementedError

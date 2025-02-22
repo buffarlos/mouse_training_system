@@ -9,11 +9,13 @@ from visual import visualize
 
 class Watcher(FileSystemEventHandler):
     """ Watches test.txt and updates metrics when new data is added. """
-    STAGE_SEQUENCE = ["hab1", "hab2", "5csr", "cpt"]
+    STAGE_SEQUENCE = ["hab1", "hab2", "5csr", "5csr_citi_10", "5csr_citi_8", "5csr_citi_4", "5csr_citi_2", "5csr_viti", 
+                      "rcpt_viti_2_to_1", "rcpt_viti_2", "rcpt_viti_175", "rcpt_viti_15", "5cpt"]
 
-    def __init__(self, mouse_id, stage):
+    def __init__(self, mouse_id, stage, terminate):
         self.mouse_id = mouse_id
         self.stage = stage
+        self.terminate_stage = terminate
         self.mouse_dir = self.create_mouse_directory()  # Ensures fresh directory
         self.metrics = {"Total Trials": 0}
         self.last_processed_row = 0  # Track the last processed row
@@ -69,7 +71,6 @@ class Watcher(FileSystemEventHandler):
 
         new_data = data[process_from:].T  # Process only new rows
         self.metrics["Total Trials"] += 1  # Update total trials count
-
         # Compute metrics from processed rows
         self.metrics["Correct"] = np.sum(new_data[1, :])  
         self.metrics["Incorrect"] = np.sum(new_data[2, :])  
@@ -82,6 +83,7 @@ class Watcher(FileSystemEventHandler):
         self.metrics["Cumulative Premature Latency"] = np.sum(new_data[10, :])
 
         # Compute percentages and derived metrics
+        self.metrics["Mean Correct Latency"] = self.metrics["Cumulative Correct Latency"] / self.metrics["Total Trials"] # Fix later
         self.metrics["Correct Percentage"] = correct_perc(self.metrics["Correct"], self.metrics["Incorrect"])
         self.metrics["Omission Percentage"] = omission_perc(self.metrics["Omission"], self.metrics["Correct"], self.metrics["Incorrect"])
         self.metrics["Correct Withholding Percentage"] = c_wh_perc(self.metrics["Correct Withholding"], self.metrics["Incorrect Withholding"])
@@ -132,7 +134,9 @@ class Watcher(FileSystemEventHandler):
         if current_index < len(self.STAGE_SEQUENCE) - 1:
             self.stage = self.STAGE_SEQUENCE[current_index + 1]
             print(f"New stage: {self.stage}")
-
+            if self.stage == self.terminate_stage:
+                print("Terimating...")
+                exit()
             # Update `stage_start_row` to track new stage correctly
             self.stage_start_row = self.last_processed_row
         else:
@@ -141,10 +145,10 @@ class Watcher(FileSystemEventHandler):
         # Reset metrics but retain last processed row tracking
         self.metrics = {"Total Trials": self.metrics["Total Trials"]}  
 
-def start_watching(mouse_id, stage, duration):
+def start_watching(mouse_id, stage, duration, terminate):
     """ Initializes and starts the file watcher process. """
     path = os.path.dirname(os.path.abspath("test.txt"))
-    event_handler = Watcher(mouse_id, stage)
+    event_handler = Watcher(mouse_id, stage, terminate)
     observer = Observer()
     observer.schedule(event_handler, path, recursive=False)
     observer.start()
