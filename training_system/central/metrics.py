@@ -39,7 +39,7 @@ def compute_threshold(task, metrics):
         
     elif task == "hab2":
         '''Requires 70 or more responses within 2 days'''
-        if(metrics["Count"] >= 70):
+        if((metrics["Count"] >= 70)):
             return True
         else:
             return False

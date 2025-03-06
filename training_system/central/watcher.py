@@ -92,8 +92,12 @@ class Watcher(FileSystemEventHandler):
 
         # Hab 1 and 2 threshold
         if latest_trial[8] > 0:
-            self.metrics["Count"] += 1
-
+            if self.stage == "hab1":
+                self.metrics["Count"] += 1
+            elif self.stage == "hab2":
+                if ( (latest_trial[0]>0) | (latest_trial[1]>0) ):
+                    self.metrics["Count"] += 1
+    
         # Compute derived metrics based on the latest trial
         self.metrics["Mean Correct Latency"] = self.metrics["Cumulative Correct Latency"] / self.metrics["Total Trials"]
         self.metrics["Correct Percentage"] = correct_perc(self.metrics["Correct"], self.metrics["Incorrect"])

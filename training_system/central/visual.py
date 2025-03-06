@@ -7,14 +7,11 @@ def generate_plot(mouse_id, stage, metrics):
     """Generates and saves a performance plot for the given mouse and stage."""
     
     if stage == "hab1":
-        # Create a figure with enough height for the progress bar and table.
         fig, ax = plt.subplots(figsize=(8, 4))
-        
-        # Title the plot.
         ax.set_title(f"Mouse {mouse_id} - {stage} Progress", pad=10)
         
-        # Calculate progress: (Correct + Incorrect) responses out of 30.
-        total_responses = metrics["Correct"] + metrics["Incorrect"]
+        # Calculate progress
+        total_responses = metrics["Count"]
         progress = min(total_responses / 30, 1)  # Cap at 100%
         
         # Define progress bar dimensions.
@@ -99,7 +96,7 @@ def generate_plot(mouse_id, stage, metrics):
         
         # ---- Progress Bar Subplot (ax1) ----
         ax1.set_title(f"Mouse {mouse_id} - {stage} Progress", pad=10)
-        total_response = metrics["Correct"] + metrics["Incorrect"]
+        total_response = metrics["Count"]
         progress = min(total_response / 70, 1)
         bar_left = 0.1   
         bar_bottom = 0.55   # near top of ax1
@@ -187,6 +184,7 @@ def generate_plot(mouse_id, stage, metrics):
         table.auto_set_font_size(False)
         table.set_fontsize(10)
     
+    #TODO Visuals for everything beyond hab: 5csr_citi, 5csr_viti, rcpt2to1, rcpt_v, cpt
     elif stage in ["5csr", "cpt"]:
         # Line plot for 5CSR and CPT stages.
         fig, ax = plt.subplots(figsize=(10, 6))
