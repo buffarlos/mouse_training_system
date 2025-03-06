@@ -32,14 +32,14 @@ def responsivity_index():
 def compute_threshold(task, metrics):
     if task == "hab1":
         '''Requires 30 or more responses within 2 days'''
-        if(metrics["Correct"] + metrics["Incorrect"] >= 30):
+        if(metrics["Count"] >= 30):
             return True
         else:
             return False
         
     elif task == "hab2":
         '''Requires 70 or more responses within 2 days'''
-        if(metrics["Correct"] + metrics["Incorrect"] >= 70):
+        if(metrics["Count"] >= 70):
             return True
         else:
             return False
@@ -102,4 +102,4 @@ def compute_threshold(task, metrics):
             return False
     
     elif task == "5cpt":
-        raise NotImplementedError
+        return

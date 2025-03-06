@@ -12,14 +12,27 @@ class Watcher(FileSystemEventHandler):
     STAGE_SEQUENCE = ["hab1", "hab2", "5csr", "5csr_citi_10", "5csr_citi_8", "5csr_citi_4", "5csr_citi_2", "5csr_viti", 
                       "rcpt_viti_2_to_1", "rcpt_viti_2", "rcpt_viti_175", "rcpt_viti_15", "5cpt"]
 
-    def __init__(self, mouse_id, stage, terminate):
+    def __init__(self, mouse_id, stage, terminate, mqtt):
         self.mouse_id = mouse_id
         self.stage = stage
+        self.mqtt = mqtt
         self.terminate_stage = terminate
         self.mouse_dir = self.create_mouse_directory()  # Ensures fresh directory
-        self.metrics = {"Total Trials": 0}
-        self.last_processed_row = 0  # Track the last processed row
-        self.stage_start_row = 0  # Start tracking from this row for current stage
+        # Initialize metrics for the current stage
+        self.metrics = {
+            "Total Trials": 0,
+            "Correct": 0,
+            "Incorrect": 0,
+            "Premature": 0,
+            "Omission": 0,
+            "Correct Withholding": 0,
+            "Incorrect Withholding": 0,
+            "Cumulative Correct Latency": 0,
+            "Cumulative Incorrect Latency": 0,
+            "Cumulative Reward Latency": 0,
+            "Cumulative Premature Latency": 0,
+            "Count": 0
+        }
         self.last_modified_time = 0
 
     def create_mouse_directory(self):
@@ -47,7 +60,7 @@ class Watcher(FileSystemEventHandler):
             self.update_metrics()
 
     def update_metrics(self):
-        """ Processes new data and updates metrics. """
+        """ Processes only the latest data row and updates metrics accordingly. """
         if not os.path.exists("test.txt") or os.stat("test.txt").st_size == 0:
             print("Warning: test.txt is empty. Skipping computation.")
             return
@@ -61,29 +74,28 @@ class Watcher(FileSystemEventHandler):
         if len(data) == 0:
             return
 
-        # Process only from `stage_start_row`
-        process_from = self.stage_start_row
-        self.last_processed_row = len(data)  # Update last row processed
+        # Extract only the latest row from test.txt
+        latest_trial = data[-1, :]
 
-        # If no new rows, return early
-        if process_from >= len(data):
-            return
+        # Update metrics based solely on the latest trial
+        self.metrics["Total Trials"] += 1
+        self.metrics["Correct"] += latest_trial[0]
+        self.metrics["Incorrect"] += latest_trial[1]
+        self.metrics["Premature"] += latest_trial[2]
+        self.metrics["Omission"] += latest_trial[3]
+        self.metrics["Correct Withholding"] += latest_trial[4]
+        self.metrics["Incorrect Withholding"] += latest_trial[5]
+        self.metrics["Cumulative Correct Latency"] += latest_trial[6]
+        self.metrics["Cumulative Incorrect Latency"] += latest_trial[7]
+        self.metrics["Cumulative Reward Latency"] += latest_trial[8]
+        self.metrics["Cumulative Premature Latency"] += latest_trial[9]
 
-        new_data = data[process_from:].T  # Process only new rows
-        self.metrics["Total Trials"] += 1  # Update total trials count
-        # Compute metrics from processed rows
-        self.metrics["Correct"] = np.sum(new_data[1, :])  
-        self.metrics["Incorrect"] = np.sum(new_data[2, :])  
-        self.metrics["Omission"] = np.sum(new_data[4, :])  
-        self.metrics["Correct Withholding"] = np.sum(new_data[5, :])  
-        self.metrics["Incorrect Withholding"] = np.sum(new_data[6, :])
-        self.metrics["Cumulative Correct Latency"] = np.sum(new_data[7, :])
-        self.metrics["Cumulative Incorrect Latency"] = np.sum(new_data[8, :])
-        self.metrics["Cumulative Reward Latency"] = np.sum(new_data[9, :])
-        self.metrics["Cumulative Premature Latency"] = np.sum(new_data[10, :])
+        # Hab 1 and 2 threshold
+        if latest_trial[8] > 0:
+            self.metrics["Count"] += 1
 
-        # Compute percentages and derived metrics
-        self.metrics["Mean Correct Latency"] = self.metrics["Cumulative Correct Latency"] / self.metrics["Total Trials"] # Fix later
+        # Compute derived metrics based on the latest trial
+        self.metrics["Mean Correct Latency"] = self.metrics["Cumulative Correct Latency"] / self.metrics["Total Trials"]
         self.metrics["Correct Percentage"] = correct_perc(self.metrics["Correct"], self.metrics["Incorrect"])
         self.metrics["Omission Percentage"] = omission_perc(self.metrics["Omission"], self.metrics["Correct"], self.metrics["Incorrect"])
         self.metrics["Correct Withholding Percentage"] = c_wh_perc(self.metrics["Correct Withholding"], self.metrics["Incorrect Withholding"])
@@ -100,11 +112,15 @@ class Watcher(FileSystemEventHandler):
         # Save metrics to data.txt
         self.save_metrics()
 
-        # Compute threshold
+        # Compute threshold and potentially advance to the next stage
         threshold = compute_threshold(task=self.stage, metrics=self.metrics)
         if threshold:
             print(f"Threshold met! Advancing from {self.stage} to next stage...")
             self.advance_stage()
+        else:
+            topic = f"mouse_{self.mouse_id}/stage"
+            self.mqtt.publish(topic, self.stage)
+            print(f"Published new stage '{self.stage}' to topic '{topic}'.")
 
     def save_metrics(self):
         """ Saves current metrics to 'mouse_{mouse_id}/{stage}/data.txt'. """
@@ -116,6 +132,7 @@ class Watcher(FileSystemEventHandler):
             f.write(f"Total Trials: {self.metrics['Total Trials']}\n")
             f.write(f"Correct: {self.metrics['Correct']}\n")
             f.write(f"Incorrect: {self.metrics['Incorrect']}\n")
+            f.write(f"Premature: {self.metrics['Premature']}\n")
             f.write(f"Omission: {self.metrics['Omission']}\n")
             f.write(f"Correct Withholding: {self.metrics['Correct Withholding']}\n")
             f.write(f"Incorrect Withholding: {self.metrics['Incorrect Withholding']}\n")
@@ -129,32 +146,45 @@ class Watcher(FileSystemEventHandler):
         print(f"Metrics saved to {file_path}")
 
     def advance_stage(self):
-        """ Advances to the next stage and resets metrics while tracking new rows only. """
+        """ Advances to the next stage and resets metrics completely for the new stage. """
         current_index = self.STAGE_SEQUENCE.index(self.stage)
         if current_index < len(self.STAGE_SEQUENCE) - 1:
             self.stage = self.STAGE_SEQUENCE[current_index + 1]
             print(f"New stage: {self.stage}")
+            # Reset all metrics for the new stage
+            self.metrics = {
+                "Total Trials": 0,
+                "Correct": 0,
+                "Incorrect": 0,
+                "Premature": 0,
+                "Omission": 0,
+                "Correct Withholding": 0,
+                "Incorrect Withholding": 0,
+                "Cumulative Correct Latency": 0,
+                "Cumulative Incorrect Latency": 0,
+                "Cumulative Reward Latency": 0,
+                "Cumulative Premature Latency": 0,
+                "Count": 0
+            }
+            # Publish the new stage to the MQTT broker
+            topic = f"mouse_{self.mouse_id}/stage"
+            self.mqtt_client.publish(topic, self.stage)
+            print(f"Published new stage '{self.stage}' to topic '{topic}'.")
+
             if self.stage == self.terminate_stage:
-                print("Terimating...")
+                print("Terminating...")
                 exit()
-            # Update `stage_start_row` to track new stage correctly
-            self.stage_start_row = self.last_processed_row
         else:
             print("Final stage reached. No further advancement.")
 
-        # Reset metrics but retain last processed row tracking
-        self.metrics = {"Total Trials": self.metrics["Total Trials"]}  
-
-def start_watching(mouse_id, stage, duration, terminate):
-    """ Initializes and starts the file watcher process. """
+def start_watching(mouse_id, stage, duration, terminate, mqtt_client):
     path = os.path.dirname(os.path.abspath("test.txt"))
-    event_handler = Watcher(mouse_id, stage, terminate)
+    event_handler = Watcher(mouse_id, stage, terminate, mqtt_client)
     observer = Observer()
     observer.schedule(event_handler, path, recursive=False)
     observer.start()
 
     start_time = time.time()
-
     try:
         while time.time() - start_time < duration:
             time.sleep(1)
