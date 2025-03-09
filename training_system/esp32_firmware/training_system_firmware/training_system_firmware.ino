@@ -1,8 +1,8 @@
-/*
-  training_system_firmware
-
-  Firmware for mouse training system
-*/
+/**
+  * Automated Training System Firmware
+  * To be compiled by Arduino IDE and flashed onto training system ESP32
+  * NOTE: Uncomment and fill network params before flashing firmware!
+  */
 
 // ------------------------- Imports -------------------------
 #include "Adafruit_GFX.h"
@@ -29,17 +29,20 @@ const int choiceXPos[5] = {50, 200, 350, 500, 650};
 const int choiceYPos = 330;
 const int choiceSize = 100;
 // Reward parameters
-const int pumpFlowRate = 1; // milliliters per second
-const int rewardVolume = 2; // milliliters
+const float pumpFlowRate = 0.025; // milliliters per second
+const float rewardVolume = 0.05; // milliliters
+const unsigned long = (rewardVolume/pumpFlowRate)*msPerSecond; // milliseconds
 /*
-###################################################
-### Network params - fill with info, then flash ###
-###################################################
+#######################################################
+### Network parameters - fill with info, then flash ###
+#######################################################
 */
 // const char* subjectID = "";
 // const char* ssid = "";
 // const char* password = "";
 // const char* mqttServer = "";
+// Conversions
+const int msPerSecond = 1000;
 
 // ------------------------- Global variables -------------------------
 // Touchscreen
@@ -94,7 +97,8 @@ void illuminateChoice(int choice) {
 bool checkChoiceTouch(int x, int y, int choice) {
   float xScale = 1024.0F/tft.width();
   float yScale = 1024.0F/tft.height();
-  if (x/xScale > (choiceXPos[choice]) && x/xScale < (choiceXPos[choice] + choiceSize)
+  if (x/xScale > (choiceXPos[choice])
+    && x/xScale < (choiceXPos[choice] + choiceSize)
     && y/yScale > choiceYPos && y/yScale < (choiceYPos + choiceSize)) {
     return true;
   }
@@ -104,8 +108,8 @@ bool checkChoiceTouch(int x, int y, int choice) {
 /**
   * @brief Extinguishes all 5 choices
   *
-  * This function extinguishes all 5 choices on the touchscreen by drawing over them
-  * with black squares.
+  * This function extinguishes all 5 choices on the touchscreen by drawing over
+  * them with black squares.
   */
 void extinguishChoices() {
   for (int i = 0; i < 5; ++i) {
@@ -119,21 +123,12 @@ void extinguishChoices() {
   }
 }
 
-void printToScreen(int startx, int starty, char text[], uint16_t color, uint16_t bg, uint8_t size) {
-  int length = strlen(text);
-  Serial.println(strlen(text));
-  Serial.println(text);
-  int characterWidth = size*6;
-  for (int i = 0; i < length; ++i) {
-    tft.drawChar(startx + characterWidth*i, starty, text[i], color, bg, size);
-  }
-}
-
 // MQTT helpers
 /**
   * @brief Attempts to connect to MQTT network if not connected
   *
-  * This function will attempt to connect to the MQTT network if currently disconnected.
+  * This function will attempt to connect to the MQTT network if currently
+  * disconnected.
   */
 void reconnect() {
   // Loop until reconnected
@@ -157,9 +152,9 @@ void reconnect() {
 /**
   * @brief Interprets incoming MQTT messages
   *
-  * This function is invoked when an MQTT message arrives on the subscribed topic.
-  * In turn, this function invokes the appropriate training function based on the
-  * message contents.
+  * This function is invoked when an MQTT message arrives on the subscribed
+  * topic. In turn, this function invokes the appropriate training function
+  * based on the message contents.
   */
 void callback(char* topic, byte* message, unsigned int length) {
   String messageTemp;
@@ -203,17 +198,15 @@ void callback(char* topic, byte* message, unsigned int length) {
 /**
   * @brief Operates the feeder magazine
   *
-  * When invoked, this function checks the reward parameter to determine whether
-  * a food reward should be administered. Then, it will illuminate the magazine to
-  * indicate that it is ready for test subject input. Once an input is received,
-  * this function will return the time it took for the subject to provide an input.
+  * When invoked, this function administers a food reward if parameter reward is
+  * true. Then, it will illuminate the magazine to indicate that it is ready for
+  * test subject input. Once an input is received, this function will return the
+  * time it took for the subject to provide an input.
   *
   * @param reward: Administers reward before illuminating magazine if true,
   * illuminates magazine without administering reward otherwise
   */
 unsigned long magOp(bool reward) {
-  // Actuates feeder pump, then illuminates and monitors magazine for reward acceptance.
-  // Returns reward acceptance latency.
   unsigned long rewardLatency;
   Serial.println("Entered mag op");
   if (reward) {
@@ -223,6 +216,7 @@ unsigned long magOp(bool reward) {
     digitalWrite(FEED_OP, LOW);
   }
   digitalWrite(MAG_OP, HIGH);
+  Serial.println("Magazine illuminated");
   unsigned long start = millis();
   while (true) {
     if (digitalRead(MAG_REP) == LOW) {
@@ -231,6 +225,7 @@ unsigned long magOp(bool reward) {
       break;
     }
   }
+  Serial.println("Magazine received input");
   return rewardLatency;
 }
 
@@ -273,9 +268,8 @@ void interTrialPeriod(unsigned long duration) {
   * @brief TASK - Habituation 1
   *
   * Administers task: Habituation 1
-  * A reward is administered, and the magazine is illuminated. 
-  *
-  * @param duration: Inhibition period in milliseconds
+  * A reward is administered, and the magazine is illuminated. Task data is
+  * reported via MQTT. An inter-trial period of 4 seconds is enforced.
   */
 void hab1() {
   unsigned long rewardLatency = magOp(true);
@@ -289,9 +283,8 @@ void hab1() {
   *
   * Administers task: Habituation 2
   * All 5 choices are illuminated. When the mouse touches any choice,
-  * a reward is administered, and the magazine is illuminated. 
-  *
-  * @param duration: Inhibition period in milliseconds
+  * a reward is administered, and the magazine is illuminated. Task data is
+  * reported via MQTT. An inter-trial period of 4 seconds is enforced.
   */
 void hab2() {
   unsigned long touchLatency = 0;
@@ -320,19 +313,21 @@ void hab2() {
 /**
   * @brief TASK - 5 Choice
   *
-  * Administers tasks:
-  * 5 CSR CITI
-  * 5 CSR VITI
-  * RCPT
+  * Administers tasks: 5 CSR CITI, 5 CSR VITI, RCPT
   * A randomly chosen choice is illuminated for a period specified by parameter
-  * stimulusDuration. The subject's response (positive, negative, absent) is noted,
-  * and the magazine is operated accordingly. An inter-trial period specified by
-  * parameter interTrialDuration is enforced. Parameter variations allow this
-  * function to execute 5 CSR CITI, 5 CSR VITI, and RCPT.
+  * stimulusDuration. If the subject touches the illuminated choice within the
+  * time period defined by parameter stimulusDuration, a reward is administered,
+  * and the magazine is illuminated. If the subject touches an incorrect choice
+  * or fails to provide an input within the time period defined by parameter
+  * stimulusDuration, no reward is administered, and the magazine is
+  * illuminated. Task data is reported via MQTT. An inter-trial period defined
+  * by parameter interTrialDuration is enforced.
   *
-  * @param duration: Inhibition period in milliseconds
+  * @param stimulusDuration: Stimulus period in milliseconds
+  * @param interTrialDuration: Inter-trial period in milliseconds
   */
-void fiveChoice(unsigned long stimulusDuration, unsigned long interTrialDuration) {
+void fiveChoice(unsigned long stimulusDuration,
+  unsigned long interTrialDuration) {
   unsigned long touchLatency = 0;
   unsigned long rewardLatency = 0;
   int choice = random(0, 5);
@@ -379,10 +374,10 @@ void fiveChoice(unsigned long stimulusDuration, unsigned long interTrialDuration
   *
   * Administers task: Inhibition.
   * No choices are illuminated. If the subject refrains from touching the screen
-  * for the period passed in parameter duration, a reward is administered.
-  * If the subject touches the screen during the inhibition period,
-  * no reward is administered, and the latency is noted.
-  * Trial information is transmitted via MQTT.
+  * for the period passed in parameter duration, a reward is administered, and
+  * the magazine is illuminated. If the subject touches the screen during the
+  * inhibition period, no reward is administered, and the magazine is
+  * illuminated. Trial information is transmitted via MQTT.
   *
   * @param duration: Inhibition period in milliseconds
   */
@@ -466,10 +461,12 @@ void setup() {
 
 // ------------------------- Main loop -------------------------
 void loop() {
+  // If disconnected from MQTT, reconnect before proceeding.
   if (!client.connected()) {
     reconnect();
   }
   client.loop();
+  // If system idle for more than 500 milliseconds, ping central computer.
   if (millis() - lastCentralComputerPing > 500) {
     lastCentralComputerPing = millis();
     sprintf(outgoingMsg, "ping");
