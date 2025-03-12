@@ -1,56 +1,72 @@
 import paho.mqtt.client as mqtt
 import threading
 
-def initialize_network(mouse_id, stage):
+def initialize_network(mouse_id, stage, ip):
+    """
+    Initializes the MQTT client, subscribes to topics, and publishes the stage.
+    Waits for a 'ping' confirmation before publishing the stage.
+    """
     mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    
-    # Create an event to wait for confirmation.
-    confirmation_event = threading.Event()
-    
-    # Store mouse_id and the event in userdata for access in callbacks.
-    mqttc.user_data_set({'mouse_id': mouse_id, 'confirmation_event': confirmation_event})
+
+    # Set up userdata with mouse_id.
+    mqttc.user_data_set({'mouse_id': mouse_id})
     mqttc.on_connect = on_connect
     mqttc.on_message = on_message
 
     # Connect to the broker.
-    mqttc.connect("192.168.0.135", 1883, 60)
+    mqttc.connect(ip, 1883, 60)
     
     # Start the network loop in a background thread.
     mqttc.loop_start()
 
-    # Publish a message to the stage topic.
-    mqttc.publish(f"mouse_{mouse_id}/stage", stage)
-    
-    # Subscribe to the data topic.
+    # Subscribe to topics.
     mqttc.subscribe(f"mouse_{mouse_id}/data")
-    
-    # Wait until the confirmation_event is set (i.e., until 'acknowledged' is received).
-    print("Waiting for confirmation...")
-    confirmation_event.wait(10)  # You can adjust the timeout as needed.
-    print("Confirmation received. Continuing execution.")
-    
+    mqttc.subscribe(f"mouse_{mouse_id}/request")
+
+    # Wait for a ping before publishing the stage.
+    if wait_for_ping(mqttc, timeout=100):
+        mqttc.publish(f"mouse_{mouse_id}/stage", stage)
+        print(f"Published stage '{stage}' after receiving ping.")
+    else:
+        print("Timeout waiting for ping. Stage not published during initialization.")
+
     return mqttc
 
-# Callback for when the client connects to the broker.
+def wait_for_ping(client, timeout=10):
+    ping_event = threading.Event()
+    userdata = client._userdata
+    userdata['ping_event'] = ping_event
+    userdata['waiting_for_ping'] = True  # Set the flag indicating we are waiting for a ping
+
+    print("Waiting for ping on request topic before publishing stage...")
+    received = ping_event.wait(timeout)
+    print("Ping received!" if received else "Ping wait timed out.")
+
+    # Clean up: remove both the ping event and waiting flag
+    userdata.pop('waiting_for_ping', None)
+    userdata.pop('ping_event', None)
+    return received
+
+
 def on_connect(client, userdata, flags, reason_code, properties):
     print(f"Connected with result code {reason_code}")
 
-# Callback for when a PUBLISH message is received.
 def on_message(client, userdata, msg):
     payload_str = msg.payload.decode('utf-8')
+    mouse_id = userdata.get('mouse_id', 'default')
     print(f"Received on {msg.topic}: {payload_str}")
-    
-    # Check if this is the confirmation message.
-    if payload_str == 'acknowledged':
-        print("Confirmation received! Starting to save incoming data...")
-        confirmation_event = userdata.get('confirmation_event')
-        if confirmation_event:
-            confirmation_event.set()
-        # Do not save the "acknowledged" message to the file.
+
+    if msg.topic == f"mouse_{mouse_id}/request" and payload_str == 'ping':
+        # Only react if we are explicitly waiting for a ping
+        if userdata.get('waiting_for_ping', False):
+            ping_event = userdata.get('ping_event')
+            if ping_event:
+                ping_event.set()
+                print("Ping processed for waiting event!")
     else:
-        # For all other messages, save the data.
-        mouse_id = userdata.get('mouse_id', 'default')
-        filename = f"mouse_{mouse_id}.txt"
+        # Save any non-ping messages to a file.
+        filename = f"mouse_{mouse_id}/mouse_{mouse_id}.txt"
         with open(filename, "a") as file:
             file.write(payload_str + "\n")
         print(f"Data saved to {filename}.")
+
