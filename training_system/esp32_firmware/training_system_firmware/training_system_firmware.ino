@@ -33,8 +33,8 @@ const int msPerSecond = 1000;
 ########################################################
 */
 // 5 choice location and size information
-const int choiceXPos[5] = {50, 200, 350, 500, 650};
-const int choiceYPos = 330;
+const int choiceXPos[5] = {26, 188, 350, 512, 674};
+const int choiceYPos = 365;
 const int choiceSize = 100;
 /*
 ######################################################
