@@ -19,7 +19,7 @@
 // Connect MOSI to ESP32-PROS3 Digital #35 (Hardware SPI MOSI)
 #define RA8875_INT 9
 #define RA8875_CS 34
-#define RA8875_RESET 38
+#define RA8875_RESET 39
 #define FEED_OP 12
 #define MAG_OP 13
 #define MAG_REP 42
