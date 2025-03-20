@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import os
-import numpy as np  # ensure numpy is imported if needed
 
 def generate_plot(mouse_id, stage, metrics):
     """Generates and saves a performance plot for the given mouse and stage."""

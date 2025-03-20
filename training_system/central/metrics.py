@@ -1,7 +1,3 @@
-import math
-import os
-import numpy as np
-
 ''' Cntains all possible metrics that are computed for Hab1, Hab2, 5 CSR, CPT'''
 
 def correct_perc(correct, incorrect):

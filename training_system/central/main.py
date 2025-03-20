@@ -1,7 +1,4 @@
 import argparse
-import os
-import time
-import numpy as np
 from watcher import start_watching
 from mqtt import initialize_network
 
