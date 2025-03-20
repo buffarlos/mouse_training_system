@@ -10,6 +10,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <PubSubClient.h>
+#include <math.h>
 
 // ------------------------- Pin name definitions -------------------------
 // Touchscreen library only supports hardware SPI at this time
@@ -18,20 +19,32 @@
 // Connect MOSI to ESP32-PROS3 Digital #35 (Hardware SPI MOSI)
 #define RA8875_INT 9
 #define RA8875_CS 34
-#define RA8875_RESET 38
+#define RA8875_RESET 39
 #define FEED_OP 12
 #define MAG_OP 13
 #define MAG_REP 42
 
 // ------------------------- Constants -------------------------
+// Conversions
+const int msPerSecond = 1000;
+/*
+########################################################
+### 5 Choice parameters - fill with info, then flash ###
+########################################################
+*/
 // 5 choice location and size information
-const int choiceXPos[5] = {50, 200, 350, 500, 650};
-const int choiceYPos = 330;
+const int choiceXPos[5] = {26, 188, 350, 512, 674};
+const int choiceYPos = 365;
 const int choiceSize = 100;
-// Reward parameters
+/*
+######################################################
+### Feeder parameters - fill with info, then flash ###
+######################################################
+*/
 const float pumpFlowRate = 0.025; // milliliters per second
-const float rewardVolume = 0.05; // milliliters
-const unsigned long = (rewardVolume/pumpFlowRate)*msPerSecond; // milliseconds
+const float rewardVolume = 0.01; // milliliters
+const unsigned long feedOpTime =
+  round((rewardVolume/pumpFlowRate)*msPerSecond); // milliseconds
 /*
 #######################################################
 ### Network parameters - fill with info, then flash ###
@@ -41,8 +54,6 @@ const unsigned long = (rewardVolume/pumpFlowRate)*msPerSecond; // milliseconds
 // const char* ssid = "";
 // const char* password = "";
 // const char* mqttServer = "";
-// Conversions
-const int msPerSecond = 1000;
 
 // ------------------------- Global variables -------------------------
 // Touchscreen
@@ -51,6 +62,7 @@ uint16_t tx, ty;
 // Network
 char topicSub[30];
 char topicPub[30];
+char topicReq[30];
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
@@ -191,6 +203,26 @@ void callback(char* topic, byte* message, unsigned int length) {
       interTrialDuration = interTrialDuration*1000;
       fiveChoice(2000, interTrialDuration);
     }
+    else if (messageTemp == "rcpt_viti_2_to_1") {
+      unsigned long interTrialDuration = random(2, 7);
+      interTrialDuration = interTrialDuration*1000;
+      fiveChoice(2000, interTrialDuration);
+    }
+    else if (messageTemp == "rcpt_viti_2") {
+      unsigned long interTrialDuration = random(2, 7);
+      interTrialDuration = interTrialDuration*1000;
+      fiveChoice(2000, interTrialDuration);
+    }
+    else if (messageTemp == "rcpt_viti_175") {
+      unsigned long interTrialDuration = random(2, 7);
+      interTrialDuration = interTrialDuration*1000;
+      fiveChoice(1750, interTrialDuration);
+    }
+    else if (messageTemp == "rcpt_viti_15") {
+      unsigned long interTrialDuration = random(2, 7);
+      interTrialDuration = interTrialDuration*1000;
+      fiveChoice(1500, interTrialDuration);
+    }
   }
 }
 
@@ -212,7 +244,7 @@ unsigned long magOp(bool reward) {
   if (reward) {
     Serial.println("Administering reward");
     digitalWrite(FEED_OP, HIGH);
-    delay(2000); // TODO: calculate based on pump flow rate, desired reward volume
+    delay(feedOpTime);
     digitalWrite(FEED_OP, LOW);
   }
   digitalWrite(MAG_OP, HIGH);
@@ -221,11 +253,13 @@ unsigned long magOp(bool reward) {
   while (true) {
     if (digitalRead(MAG_REP) == LOW) {
       rewardLatency = millis() - start;
+      Serial.print("Magazine input in ");
+      Serial.print(rewardLatency);
+      Serial.println(" ms");
       digitalWrite(MAG_OP, LOW);
       break;
     }
   }
-  Serial.println("Magazine received input");
   return rewardLatency;
 }
 
@@ -272,8 +306,22 @@ void interTrialPeriod(unsigned long duration) {
   * reported via MQTT. An inter-trial period of 4 seconds is enforced.
   */
 void hab1() {
-  unsigned long rewardLatency = magOp(true);
-  sprintf(outgoingMsg, "%d", rewardLatency);
+  int positive = 0;
+  int negative = 0;
+  int premature = 0;
+  int omission = 0;
+  int positiveWithhold = 0;
+  int negativeWithhold = 0;
+  unsigned long correctLatency = 0;
+  unsigned long incorrectLatency = 0;
+  unsigned long rewardLatency = 0;
+  unsigned long prematureLatency = 0;
+
+  rewardLatency = magOp(true);
+  sprintf(outgoingMsg, "0 0 0 0 0 0 0 0 %d 0 0", rewardLatency);
+  if (!client.connected()) {
+    reconnect();
+  }
   client.publish(topicPub, outgoingMsg);
   interTrialPeriod(4000);
 }
@@ -287,8 +335,17 @@ void hab1() {
   * reported via MQTT. An inter-trial period of 4 seconds is enforced.
   */
 void hab2() {
-  unsigned long touchLatency = 0;
+  int positive = 0;
+  int negative = 0;
+  int premature = 0;
+  int omission = 0;
+  int positiveWithhold = 0;
+  int negativeWithhold = 0;
+  unsigned long correctLatency = 0;
+  unsigned long incorrectLatency = 0;
   unsigned long rewardLatency = 0;
+  unsigned long prematureLatency = 0;
+
   tft.touchRead(&tx, &ty);
   for (int i = 0; i < 5; ++i) {
     illuminateChoice(i);
@@ -298,14 +355,18 @@ void hab2() {
     if (! digitalRead(RA8875_INT)) {
       if (tft.touched()) {
         tft.touchRead(&tx, &ty);
-        touchLatency = millis() - start;
+        positive = 1;
+        correctLatency = millis() - start;
         extinguishChoices();
         rewardLatency = magOp(true);
         break;
       }
     }
   }
-  sprintf(outgoingMsg, "%d %d", touchLatency, rewardLatency);
+  sprintf(outgoingMsg, "%d 0 0 0 0 0 %d 0 %d 0 0", positive, correctLatency, rewardLatency);
+  if (!client.connected()) {
+    reconnect();
+  }
   client.publish(topicPub, outgoingMsg);
   interTrialPeriod(4000);
 }
@@ -328,8 +389,17 @@ void hab2() {
   */
 void fiveChoice(unsigned long stimulusDuration,
   unsigned long interTrialDuration) {
-  unsigned long touchLatency = 0;
+  int positive = 0;
+  int negative = 0;
+  int premature = 0;
+  int omission = 0;
+  int positiveWithhold = 0;
+  int negativeWithhold = 0;
+  unsigned long correctLatency = 0;
+  unsigned long incorrectLatency = 0;
   unsigned long rewardLatency = 0;
+  unsigned long prematureLatency = 0;
+
   int choice = random(0, 5);
   tft.touchRead(&tx, &ty);
   unsigned long start = millis();
@@ -338,19 +408,22 @@ void fiveChoice(unsigned long stimulusDuration,
     if (! digitalRead(RA8875_INT)) {
       if (tft.touched()) {
         tft.touchRead(&tx, &ty);
-        touchLatency = millis() - start;
         extinguishChoices();
         if (checkChoiceTouch(tx, ty, choice)) {
+          correctLatency = millis() - start;
           Serial.print("Positive input in ");
-          Serial.print(touchLatency);
+          Serial.print(correctLatency);
           Serial.println(" ms");
+          positive = 1;
           rewardLatency = magOp(true);
           break;
         }
         else {
+          incorrectLatency = millis() - start;
           Serial.print("Negative input in ");
-          Serial.print(touchLatency);
+          Serial.print(incorrectLatency);
           Serial.println(" ms");
+          negative = 1;
           rewardLatency = magOp(false);
           break;
         }
@@ -359,12 +432,16 @@ void fiveChoice(unsigned long stimulusDuration,
     if (millis() - start > stimulusDuration) {
       extinguishChoices();
       Serial.println("Absent response");
+      omission = 1;
       rewardLatency = magOp(false);
       break;
     }
     delay(10);
   }
-  sprintf(outgoingMsg, "%d %d", touchLatency, rewardLatency);
+  sprintf(outgoingMsg, "%d %d 0 %d 0 0 %d %d %d 0 %d", positive, negative, omission, correctLatency, incorrectLatency, rewardLatency, interTrialDuration);
+  if (!client.connected()) {
+    reconnect();
+  }
   client.publish(topicPub, outgoingMsg);
   interTrialPeriod(interTrialDuration);
 }
@@ -382,29 +459,48 @@ void fiveChoice(unsigned long stimulusDuration,
   * @param duration: Inhibition period in milliseconds
   */
 void inhibitionTrial(unsigned long duration) {
+  int positive = 0;
+  int negative = 0;
+  int premature = 0;
+  int omission = 0;
+  int positiveWithhold = 0;
+  int negativeWithhold = 0;
+  unsigned long correctLatency = 0;
+  unsigned long incorrectLatency = 0;
+  unsigned long rewardLatency = 0;
+  unsigned long prematureLatency = 0;
+
   tft.touchRead(&tx, &ty);
   unsigned long start = millis();
   while (true) {
     if (! digitalRead(RA8875_INT)) {
       if (tft.touched()) {
         tft.touchRead(&tx, &ty);
-        unsigned long latency = millis() - start;
+        negativeWithhold = 1;
+        prematureLatency = millis() - start;
         Serial.print("Failed inhibition in ");
-        Serial.print(latency);
+        Serial.print(prematureLatency);
         Serial.println(" milliseconds");
-        magOp(false);
+        rewardLatency = magOp(false);
         tft.touchRead(&tx, &ty);
-        return;
+        break;
       }
     }
     if (millis() - start > duration) {
+      positiveWithhold = 1;
       Serial.println("Inhibition success");
-      magOp(true);
+      rewardLatency = magOp(true);
       tft.touchRead(&tx, &ty);
-      ;
+      break;
     }
     delay(10);
   }
+  sprintf(outgoingMsg, "0 0 0 0 %d %d 0 0 %d %d 0", positiveWithhold, negativeWithhold, prematureLatency, rewardLatency);
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.publish(topicPub, outgoingMsg);
+  interTrialPeriod(4000);
 }
 
 // ------------------------- Setup function -------------------------
@@ -415,6 +511,7 @@ void setup() {
   // MQTT topics
   sprintf(topicSub, "%s/stage", subjectID);
   sprintf(topicPub, "%s/data", subjectID);
+  sprintf(topicReq, "%s/request", subjectID);
 
   // Screen initialization
   if (!tft.begin(RA8875_800x480)) {
@@ -466,10 +563,10 @@ void loop() {
     reconnect();
   }
   client.loop();
-  // If system idle for more than 500 milliseconds, ping central computer.
+  // If more than 500 milliseconds since last ping, ping central computer.
   if (millis() - lastCentralComputerPing > 500) {
     lastCentralComputerPing = millis();
     sprintf(outgoingMsg, "ping");
-    client.publish(topicPub, outgoingMsg);
+    client.publish(topicReq, outgoingMsg);
   }
 }
