@@ -50,10 +50,10 @@ const unsigned long feedOpTime =
 ### Network parameters - fill with info, then flash ###
 #######################################################
 */
-// const char* subjectID = "";
-// const char* ssid = "";
-// const char* password = "";
-// const char* mqttServer = "";
+const char* subjectID = "mouse_3";
+const char* ssid = "TP-Link_5E1F";
+const char* password = "13111014";
+const char* mqttServer = "192.168.0.69";
 
 // ------------------------- Global variables -------------------------
 // Touchscreen
@@ -63,6 +63,7 @@ uint16_t tx, ty;
 char topicSub[30];
 char topicPub[30];
 char topicReq[30];
+char clientID[30];
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
@@ -70,6 +71,18 @@ char msg[50];
 char outgoingMsg[100];
 int value = 0;
 unsigned long lastCentralComputerPing = 0;
+// Training
+bool twoToOne[15] =
+  {false, false, false, false, false,
+  false, false, false, false, false,
+  false, false, false, false, false
+};
+int twoToOneIndex = 0;
+bool fiveToOne[18] =
+  {false, false, false, false, false, false,
+  false, false, false, false, false, false,
+  false, false, false, false, false, false
+};
 
 // ------------------------- Helper functions -------------------------
 // Touchscreen helpers
@@ -147,7 +160,7 @@ void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (client.connect("ESP8266Client")) {
+    if (client.connect(clientID)) {
       Serial.println("connected");
       // Subscribe
       client.subscribe(topicSub);
@@ -204,9 +217,28 @@ void callback(char* topic, byte* message, unsigned int length) {
       fiveChoice(2000, interTrialDuration);
     }
     else if (messageTemp == "rcpt_viti_2_to_1") {
-      unsigned long interTrialDuration = random(2, 7);
-      interTrialDuration = interTrialDuration*1000;
-      fiveChoice(2000, interTrialDuration);
+      if (twoToOneIndex = 0) {
+        int noGosChosen = 0;
+        while (noGosChosen < 5) {
+          int randomIndex = random(0, 15);
+          if (!twoToOne[randomIndex]) {
+            twoToOne[randomIndex] = true;
+            noGosChosen += 1;
+          }
+        }
+      }
+      if (twoToOne[twoToOneIndex]) {
+        inhibitionTrial(2000);
+      }
+      else {
+        unsigned long interTrialDuration = random(2, 7);
+        interTrialDuration = interTrialDuration*1000;
+        fiveChoice(2000, interTrialDuration);
+      }
+      twoToOneIndex += 1;
+      if (twoToOneIndex == 15) {
+        twoToOneIndex = 0;
+      }
     }
     else if (messageTemp == "rcpt_viti_2") {
       unsigned long interTrialDuration = random(2, 7);
@@ -362,8 +394,15 @@ void hab2() {
         break;
       }
     }
+    if (millis() - start > 30000) {
+      extinguishChoices();
+      Serial.println("Absent response");
+      omission = 1;
+      rewardLatency = magOp(false);
+      break;
+    }
   }
-  sprintf(outgoingMsg, "%d 0 0 0 0 0 %d 0 %d 0 0", positive, correctLatency, rewardLatency);
+  sprintf(outgoingMsg, "%d 0 0 %d 0 0 %d 0 %d 0 0", positive, omission, correctLatency, rewardLatency);
   if (!client.connected()) {
     reconnect();
   }
@@ -512,6 +551,7 @@ void setup() {
   sprintf(topicSub, "%s/stage", subjectID);
   sprintf(topicPub, "%s/data", subjectID);
   sprintf(topicReq, "%s/request", subjectID);
+  sprintf(clientID, "ESP8266Client%s", subjectID);
 
   // Screen initialization
   if (!tft.begin(RA8875_800x480)) {
